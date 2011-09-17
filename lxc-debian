@@ -48,10 +48,10 @@ l6:6:wait:/etc/init.d/rc 6
 # Normally not reached, but fallthrough in case of emergency.
 z6:6:respawn:/sbin/sulogin
 1:2345:respawn:/sbin/getty 38400 console
-c1:12345:respawn:/sbin/getty 38400 tty1 linux
-c2:12345:respawn:/sbin/getty 38400 tty2 linux
-c3:12345:respawn:/sbin/getty 38400 tty3 linux
-c4:12345:respawn:/sbin/getty 38400 tty4 linux
+#c1:12345:respawn:/sbin/getty 38400 tty1 linux
+#c2:12345:respawn:/sbin/getty 38400 tty2 linux
+#c3:12345:respawn:/sbin/getty 38400 tty3 linux
+#c4:12345:respawn:/sbin/getty 38400 tty4 linux
 EOF
 }
 
@@ -62,7 +62,9 @@ auto lo
 iface lo inet loopback
 
 auto eth0
-iface eth0 inet dhcp
+iface eth0 inet static
+    address $IP
+    netmask 255.255.255.0
 EOF
 cat <<EOF >> $ROOTFS/etc/dhcp3/dhclient.conf
 send host-name "$UTSNAME";
@@ -162,22 +164,6 @@ lxc.network.link = br0
 lxc.network.name = eth0
 lxc.network.mtu = $MTU
 lxc.mount = $TMPMNTFILE
-lxc.cgroup.devices.deny = a
-# /dev/null and zero
-lxc.cgroup.devices.allow = c 1:3 rwm
-lxc.cgroup.devices.allow = c 1:5 rwm
-# consoles
-lxc.cgroup.devices.allow = c 5:1 rwm
-lxc.cgroup.devices.allow = c 5:0 rwm
-lxc.cgroup.devices.allow = c 4:0 rwm
-lxc.cgroup.devices.allow = c 4:1 rwm
-# /dev/{,u}random
-lxc.cgroup.devices.allow = c 1:9 rwm
-lxc.cgroup.devices.allow = c 1:8 rwm
-lxc.cgroup.devices.allow = c 136:* rwm
-lxc.cgroup.devices.allow = c 5:2 rwm
-# rtc
-lxc.cgroup.devices.allow = c 254:0 rwm
 EOF
 }
 
@@ -240,7 +226,7 @@ install_debian()
     echo "Downloading debian minimal ..."
     debootstrap --verbose --variant=minbase --arch=$ARCH \
         --include ifupdown,locales,libui-dialog-perl,dialog,netbase,net-tools,iproute,openssh-server,dhcp3-client \
-        lenny $ROOTFS $DEBMIRROR
+        squeeze $ROOTFS $DEBMIRROR
 
     RESULT=$?
     if [ "$RESULT" != "0" ]; then
@@ -277,7 +263,6 @@ create() {
     RES=$?
 
     # remove the configuration files
-    rm -f $CONFFILE
     rm -f $TMPMNTFILE
 
     if [ "$RES" != "0" ]; then
@@ -367,7 +352,6 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
-NAME=""
 COMMAND=$1
 shift
 while getopts "n:" flag
@@ -386,7 +370,7 @@ if [ -z "$NAME" ]; then
     exit 1
 fi
 
-ROOTFS="/var/lib/lxc/$NAME/rootfs"
+#ROOTFS="/home/offlinehacker/projects/pipa_stream/vm/$NAME/fs"
 
 case "$COMMAND" in
     create)   create;;
