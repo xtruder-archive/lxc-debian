@@ -4,8 +4,9 @@
 #
 # This script is based on the lxc-debian example script that ships with lxc.
 #
-# Copyright (C) 2010 Nigel McNie
-#
+# Copyright (C) 2010 Nigel McNie, 2011 Jaka Hudoklin
+# 
+# Set ROOTFS and IP variables.
 
 CONFFILE="lxc.conf"
 MNTFILE=
@@ -14,7 +15,10 @@ UTSNAME=
 MTU="1500"
 DEBMIRROR=http://ftp.debian.org/debian
 FQDN=$(hostname --fqdn)
-
+DEFROOTDIR="/home/offlinehacker/vm/lxc"
+HOSTPREFIX="offlinehacker"
+GATEWAY="192.168.3.1"
+ROOTHOST="offlinehacker-laptop $GATEWAY"
 
 ################################################################################
 #                    debian custom configuration files
@@ -29,7 +33,11 @@ write_debian_selinux() {
 # Write out a custom fstab
 write_debian_fstab() {
 cat <<EOF > $ROOTFS/etc/fstab
-tmpfs  /dev/shm   tmpfs  defaults  0 0
+rootfs / rootfs rw 0 0
+none /dev/pts devpts defaults 0 0
+none /proc    proc   defaults 0 0
+none /sys     sysfs  defaults 0 0
+none /dev/shm tmpfs  defaults 0 0
 EOF
 }
 
@@ -65,6 +73,7 @@ auto eth0
 iface eth0 inet static
     address $IP
     netmask 255.255.255.0
+    gateway $GATEWAY
 EOF
 cat <<EOF >> $ROOTFS/etc/dhcp3/dhclient.conf
 send host-name "$UTSNAME";
@@ -78,6 +87,7 @@ $UTSNAME
 EOF
 cat <<EOF > $ROOTFS/etc/hosts
 127.0.0.1   $UTSNAME localhost
+$ROOTHOST
 
 # The following lines are desirable for IPv6 capable hosts
 ::1     localhost ip6-localhost ip6-loopback
@@ -154,16 +164,15 @@ disable_debian_services() {
 ################################################################################
 
 write_lxc_configuration() {
-cat <<EOF > $CONFFILE
+cat <<EOF > $ROOTDIR/$NAME/$CONFFILE
 lxc.utsname = $UTSNAME
-lxc.tty = 4
-lxc.pts = 1024
 lxc.network.type = veth
-lxc.network.flags = up
 lxc.network.link = br0
+lxc.network.ipv4 = $GATEWAY/24
 lxc.network.name = eth0
-lxc.network.mtu = $MTU
-lxc.mount = $TMPMNTFILE
+lxc.network.flags = up
+lxc.mount = $ROOTFS/etc/fstab
+lxc.rootfs = $ROOTFS
 EOF
 }
 
@@ -259,7 +268,7 @@ create() {
     write_lxc_mounts
     write_lxc_configuration
 
-    /usr/bin/lxc-create -n $NAME -f $CONFFILE
+    /usr/bin/lxc-create -n $NAME -f $ROOTDIR/$NAME/$CONFFILE
     RES=$?
 
     # remove the configuration files
@@ -283,6 +292,8 @@ create() {
     run_pre_create_hook
     run_post_create_hooks
 
+    echo "$UTSNAME $IP" >> /etc/hosts
+
     echo "Done."
     echo -e "\nYou can run your container with the 'lxc-start -n $NAME'\n"
 }
@@ -296,19 +307,21 @@ destroy() {
         exit
     fi
 
-    halt=$(which lxc-halt)
-    if lxc-info -n $NAME | grep RUNNING > /dev/null; then
-        if [ -n "$halt" ]; then
-            lxc-halt -n $NAME
-        else
-            lxc-stop -n $NAME
-        fi
-    fi
-    sleep .5
-
-    rm -rf $ROOTFS
     /usr/bin/lxc-destroy -n $NAME
     RETVAL=$?
+
+#    Why would we care about halting if we are destroying.
+#    halt=$(which lxc-halt)
+#    if lxc-info -n $NAME | grep RUNNING > /dev/null; then
+#        if [ -n "$halt" ]; then
+#            lxc-halt -n $NAME
+#        else
+#            lxc-stop -n $NAME
+#        fi
+#    fi
+#    sleep .5
+
+    rm -rf $ROOTDIR/$NAME
     if [ ! $RETVAL -eq 0 ]; then
         echo "Failed to destroyed '$NAME'"
         return $RETVAL
@@ -331,7 +344,7 @@ EOF
 }
 
 usage() {
-    echo "Usage: $(readlink -f $0) {create|destroy} -n NAME"
+    echo "Usage: $(readlink -f $0) {create|destroy} -n NAME -i IP -r ROOTDIR"
     exit 0
 }
 
@@ -354,10 +367,12 @@ fi
 
 COMMAND=$1
 shift
-while getopts "n:" flag
+while getopts "n:i:r:" flag
 do
     case $flag in
         n) NAME="$OPTARG" ;;
+	i) IP="$OPTARG" ;;
+	r) ROOTDIR="$OPTARG" ;;
         *)
             echo "Unknown argument: $flag"
             exit 1
@@ -370,7 +385,20 @@ if [ -z "$NAME" ]; then
     exit 1
 fi
 
-#ROOTFS="/home/offlinehacker/projects/pipa_stream/vm/$NAME/fs"
+if [ -z "$IP" ]; then
+    echo "lxc-debian: missing container ip, use -i option"
+    exit 1
+fi
+
+if [ -z "$ROOTDIR" ]; then
+    echo "lxc-debian: missing container rootdir, using default"
+    ROOTFS="$DEFROOTDIR/$NAME/fs"
+    ROOTDIR=$DEFROOTDIR
+else
+    ROOTFS="$ROOTDIR/$NAME/fs"
+fi
+
+echo "Creating/destroying container $NAME on $ROOTDIR/$NAME"
 
 case "$COMMAND" in
     create)   create;;
