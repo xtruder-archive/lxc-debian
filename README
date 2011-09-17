@@ -19,11 +19,11 @@ modifications to make it a little easier to use.
 
 To create a container, run
 
-    lxc-debian create
+    lxc-debian create -n NAME -i IP [-r ROOTDIR]
 
-To remove one, run
+To destroy a container, run
 
-    lxc-debian destroy
+    lxc-debian destroy -n NAME -i IP [-r ROOTDIR]
 
 If you want to script some operations for when a container is created, I have
 added some hooks:
