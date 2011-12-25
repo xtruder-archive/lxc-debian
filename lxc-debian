@@ -164,6 +164,7 @@ disable_debian_services() {
 ################################################################################
 
 write_lxc_configuration() {
+mkdir $ROOTDIR/$NAME/
 cat <<EOF > $ROOTDIR/$NAME/$CONFFILE
 lxc.utsname = $UTSNAME
 lxc.network.type = veth
@@ -235,7 +236,7 @@ install_debian()
     echo "Downloading debian minimal ..."
     debootstrap --verbose --variant=minbase --arch=$ARCH \
         --include ifupdown,locales,libui-dialog-perl,dialog,netbase,net-tools,iproute,openssh-server,dhcp3-client \
-        squeeze $ROOTFS $DEBMIRROR
+        wheezy $ROOTFS $DEBMIRROR
 
     RESULT=$?
     if [ "$RESULT" != "0" ]; then
